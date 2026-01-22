@@ -6,8 +6,17 @@ import Link from 'next/link'
 import { getCurrentAccount } from '@/lib/web3'
 import { getReputationHubContract, getReputationTokenContract } from '@/lib/contracts'
 import { calculateWalletReputation, getReputationBalance, getReputationScore } from '@/lib/reputation'
-import { formatAddress } from '@/lib/utils'
+import { formatAddress, formatAddressOrName, formatDate, getEtherscanLink } from '@/lib/utils'
+import { getProvider } from '@/lib/web3'
 import FAQ from '@/components/FAQ'
+
+interface MintEvent {
+  wallet: string
+  amount: bigint
+  timestamp: number
+  blockNumber: number
+  txHash: string
+}
 
 export default function MintPage() {
   const [address, setAddress] = useState<string | null>(null)
@@ -19,13 +28,71 @@ export default function MintPage() {
   const [isMinting, setIsMinting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [mintFeed, setMintFeed] = useState<MintEvent[]>([])
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false)
 
   const hubAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_HUB || ''
   const tokenAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN || ''
 
   useEffect(() => {
     loadWalletData()
+    loadMintFeed()
   }, [])
+
+  const loadMintFeed = async () => {
+    if (!hubAddress) return
+
+    setIsLoadingFeed(true)
+    try {
+      const provider = getProvider()
+      const hubContract = getReputationHubContract(hubAddress)
+      
+      // Получаем текущий блок
+      const currentBlock = await provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 50000) // Последние ~50000 блоков
+      
+      // Получаем события ReputationMinted
+      const mintTopic = ethers.id('ReputationMinted(address,uint256)')
+      const logs = await provider.getLogs({
+        address: hubAddress,
+        topics: [mintTopic],
+        fromBlock,
+        toBlock: currentBlock,
+      })
+
+      // Парсим события
+      const events: MintEvent[] = []
+      for (const log of logs) {
+        try {
+          const parsedLog = hubContract.interface.parseLog({
+            topics: log.topics as string[],
+            data: log.data,
+          })
+          
+          if (parsedLog && parsedLog.name === 'ReputationMinted') {
+            const block = await provider.getBlock(log.blockNumber)
+            events.push({
+              wallet: parsedLog.args[0] as string,
+              amount: BigInt(parsedLog.args[1].toString()),
+              timestamp: block?.timestamp || 0,
+              blockNumber: log.blockNumber,
+              txHash: log.transactionHash,
+            })
+          }
+        } catch (e) {
+          console.error('Error parsing log:', e)
+        }
+      }
+
+      // Сортируем по времени (новые первыми)
+      events.sort((a, b) => b.timestamp - a.timestamp)
+      setMintFeed(events.slice(0, 50)) // Показываем последние 50
+    } catch (err: any) {
+      console.error('Error loading mint feed:', err)
+    } finally {
+      setIsLoadingFeed(false)
+    }
+  }
 
   const loadWalletData = async () => {
     try {
@@ -145,6 +212,7 @@ export default function MintPage() {
       
       // Обновляем данные
       await loadWalletData()
+      await loadMintFeed() // Обновляем фид после минта
     } catch (err: any) {
       console.error('Mint error:', err)
       if (err.message?.includes('exceeds maximum') || err.message?.includes('must be greater')) {
@@ -377,11 +445,57 @@ export default function MintPage() {
           )}
         </div>
 
-        <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-6">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            <strong>Note:</strong> Currently, reputation can only be minted by the contract owner. 
-            A public minting mechanism will be available soon based on wallet activity analysis.
-          </p>
+        {/* Mint Feed */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-2xl font-semibold mb-4">Recent Reputation Mints</h2>
+          
+          {isLoadingFeed ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading mint history...</p>
+            </div>
+          ) : mintFeed.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No reputation mints yet. Be the first to mint!</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {mintFeed.map((event, index) => (
+                <div
+                  key={`${event.txHash}-${index}`}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm">
+                        {formatAddressOrName(event.wallet)}
+                      </span>
+                      {address && event.wallet.toLowerCase() === address.toLowerCase() && (
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded">
+                          You
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatDate(event.timestamp)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-green-600 dark:text-green-400">
+                      +{parseFloat(ethers.formatEther(event.amount)).toFixed(2)} REP
+                    </div>
+                    <a
+                      href={getEtherscanLink(event.txHash, 'neura_testnet', 'tx')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      View on Explorer
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Reputation Criteria */}
