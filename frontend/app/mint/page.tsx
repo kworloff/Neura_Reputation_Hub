@@ -1,0 +1,409 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { ethers } from 'ethers'
+import Link from 'next/link'
+import { getCurrentAccount } from '@/lib/web3'
+import { getReputationHubContract, getReputationTokenContract } from '@/lib/contracts'
+import { calculateWalletReputation, getReputationBalance, getReputationScore } from '@/lib/reputation'
+import { formatAddress } from '@/lib/utils'
+import FAQ from '@/components/FAQ'
+
+export default function MintPage() {
+  const [address, setAddress] = useState<string | null>(null)
+  const [reputationScore, setReputationScore] = useState<string>('0')
+  const [tokenBalance, setTokenBalance] = useState<string>('0')
+  const [calculatedScore, setCalculatedScore] = useState<number>(0)
+  const [breakdown, setBreakdown] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isMinting, setIsMinting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  const hubAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_HUB || ''
+  const tokenAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN || ''
+
+  useEffect(() => {
+    loadWalletData()
+  }, [])
+
+  const loadWalletData = async () => {
+    try {
+      const account = await getCurrentAccount()
+      if (!account) {
+        setError('Please connect your wallet first')
+        return
+      }
+
+      setAddress(account)
+      setIsLoading(true)
+
+      // Загружаем данные параллельно
+      const [score, balance, calculated] = await Promise.all([
+        getReputationScore(hubAddress, account).catch(() => '0'),
+        getReputationBalance(tokenAddress, account).catch(() => '0'),
+        calculateWalletReputation(account, hubAddress).catch(() => ({ score: 0, breakdown: null })),
+      ])
+
+      setReputationScore(score)
+      setTokenBalance(balance)
+      setCalculatedScore(calculated.score)
+      setBreakdown(calculated.breakdown)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load wallet data')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleMint = async () => {
+    if (!address || !hubAddress) {
+      setError('Wallet not connected or contract address not set')
+      return
+    }
+
+    setIsMinting(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed')
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      
+      // Получаем контракт Hub
+      const hubContract = getReputationHubContract(hubAddress, signer)
+      
+      // Рассчитываем количество репутации для минта (в wei)
+      const amount = ethers.parseEther(calculatedScore.toString())
+      
+      // Вызываем функцию минта (требует owner, но пока пытаемся)
+      // В будущем можно добавить публичную функцию
+      const tx = await hubContract.mintReputation(address, amount)
+      setSuccess('Transaction sent! Waiting for confirmation...')
+      
+      await tx.wait()
+      setSuccess('Reputation minted successfully!')
+      
+      // Обновляем данные
+      await loadWalletData()
+    } catch (err: any) {
+      if (err.message?.includes('Ownable: caller is not the owner')) {
+        setError('Only contract owner can mint reputation. This feature will be available soon.')
+      } else {
+        setError(err.message || 'Failed to mint reputation')
+      }
+    } finally {
+      setIsMinting(false)
+    }
+  }
+
+  if (!address) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-24">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
+          <p className="text-gray-500">Please connect your wallet to view and mint reputation</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen p-8 md:p-24">
+      <div className="max-w-4xl mx-auto">
+        {/* Navigation */}
+        <div className="mb-6 flex gap-4 justify-center">
+          <Link
+            href="/"
+            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
+          >
+            Home
+          </Link>
+          <Link
+            href="/transfer"
+            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
+          >
+            Transfer Reputation
+          </Link>
+          <Link
+            href="/feed"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm"
+          >
+            View Feed
+          </Link>
+          <Link
+            href="/dao"
+            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm"
+          >
+            DAO
+          </Link>
+        </div>
+        
+        <h1 className="text-4xl font-bold text-center mb-8">Mint Reputation</h1>
+        
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-2xl font-semibold mb-4">Your Reputation</h2>
+          
+          {isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Current Score</p>
+                  <p className="text-2xl font-bold">
+                    {reputationScore && parseFloat(reputationScore) > 0 
+                      ? parseFloat(reputationScore).toFixed(2).replace(/\.?0+$/, '')
+                      : '0'}
+                  </p>
+                </div>
+                
+                <div className="bg-green-50 dark:bg-green-900 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Token Balance</p>
+                  <p className="text-2xl font-bold">{parseFloat(tokenBalance).toFixed(2)} REP</p>
+                </div>
+                
+                <div className="bg-purple-50 dark:bg-purple-900 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Calculated Score</p>
+                  <p className="text-2xl font-bold">{calculatedScore}</p>
+                </div>
+              </div>
+
+              {breakdown && (
+                <div className="mt-6 space-y-4">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <h3 className="font-semibold mb-3">Reputation Breakdown</h3>
+                    
+                    {/* Transaction History */}
+                    <div className="mb-3 pb-3 border-b border-gray-300 dark:border-gray-600">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">1. Transaction History (46%)</span>
+                        <span className="font-bold">{breakdown.transactionHistory?.total || 0} pts</span>
+                      </div>
+                      <div className="text-xs space-y-1 ml-4 text-gray-600 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Count:</span>
+                          <span>{breakdown.transactionHistory?.count || 0} pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Regularity:</span>
+                          <span>{breakdown.transactionHistory?.regularity || 0} pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Diversity:</span>
+                          <span>{breakdown.transactionHistory?.diversity || 0} pts</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Balance & Activity */}
+                    <div className="mb-3 pb-3 border-b border-gray-300 dark:border-gray-600">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">2. Balance & Activity (31%)</span>
+                        <span className="font-bold">{breakdown.balanceActivity?.total || 0} pts</span>
+                      </div>
+                      <div className="text-xs space-y-1 ml-4 text-gray-600 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Balance:</span>
+                          <span>{breakdown.balanceActivity?.balance || 0} pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Stability:</span>
+                          <span>{breakdown.balanceActivity?.stability || 0} pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Transfers:</span>
+                          <span>{breakdown.balanceActivity?.transfers || 0} pts</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Wallet Age */}
+                    <div className="mb-3 pb-3 border-b border-gray-300 dark:border-gray-600">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">3. Wallet Age (15%)</span>
+                        <span className="font-bold">{breakdown.walletAge?.score || 0} pts</span>
+                      </div>
+                      <div className="text-xs ml-4 text-gray-600 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Age:</span>
+                          <span>{breakdown.walletAge?.days || 0} days</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Social Activity */}
+                    <div className="mb-3 pb-3 border-b border-gray-300 dark:border-gray-600">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">4. Social Activity (8%)</span>
+                        <span className="font-bold">{breakdown.socialActivity?.total || 0} pts</span>
+                      </div>
+                      <div className="text-xs space-y-1 ml-4 text-gray-600 dark:text-gray-400">
+                        <div className="flex justify-between">
+                          <span>Reputation Transfers:</span>
+                          <span>{breakdown.socialActivity?.reputationTransfers || 0} pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>DAO Participation:</span>
+                          <span>{breakdown.socialActivity?.daoParticipation || 0} pts</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bonuses */}
+                    {breakdown.bonuses > 0 && (
+                      <div className="mb-3">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-green-600 dark:text-green-400">Bonuses</span>
+                          <span className="font-bold text-green-600 dark:text-green-400">+{breakdown.bonuses || 0} pts</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Total */}
+                    <div className="pt-3 border-t-2 border-gray-400 dark:border-gray-500">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-lg">Total Score</span>
+                        <span className="font-bold text-lg">{breakdown.total || 0} / 390</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6">
+                {(() => {
+                  const tokenBalanceNum = parseFloat(tokenBalance || '0');
+                  const calculatedScoreNum = calculatedScore || 0;
+                  const alreadyMinted = tokenBalanceNum >= calculatedScoreNum * 0.95; // Учитываем небольшие погрешности
+                  const canMint = calculatedScoreNum > 0 && !alreadyMinted;
+                  
+                  if (alreadyMinted && calculatedScoreNum > 0) {
+                    return (
+                      <div className="w-full py-3 px-6 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg font-medium text-center">
+                        Reputation already minted ({tokenBalanceNum.toFixed(2)} REP)
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <button
+                      onClick={handleMint}
+                      disabled={isMinting || !canMint}
+                      className="w-full py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+                    >
+                      {isMinting ? 'Minting...' : `Mint ${calculatedScore} Reputation Points`}
+                    </button>
+                  );
+                })()}
+              </div>
+
+              {error && (
+                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg">
+                  <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
+                </div>
+              )}
+
+              {success && (
+                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 rounded-lg">
+                  <p className="text-green-700 dark:text-green-300 text-sm">{success}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-6">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            <strong>Note:</strong> Currently, reputation can only be minted by the contract owner. 
+            A public minting mechanism will be available soon based on wallet activity analysis.
+          </p>
+        </div>
+
+        {/* Reputation Criteria */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-2xl font-semibold mb-4">Reputation Criteria</h2>
+          <div className="space-y-4">
+            <div className="border-l-4 border-blue-500 pl-4">
+              <h3 className="font-semibold mb-2">1. Transaction History (46% - Max 180 points)</h3>
+              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                <li>• Transaction Count (0-100 pts): More transactions = higher score</li>
+                <li>• Regularity (0-50 pts): Evenly distributed transactions get maximum points</li>
+                <li>• Diversity (0-30 pts): Interaction with different contracts increases score</li>
+              </ul>
+            </div>
+
+            <div className="border-l-4 border-green-500 pl-4">
+              <h3 className="font-semibold mb-2">2. Balance & Activity (31% - Max 120 points)</h3>
+              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                <li>• ANKR Balance (0-60 pts): 1-50 ANKR = 10pts, 51-200 = 20pts, 201-500 = 40pts, 501-1000 = 60pts</li>
+                <li>• Stability (0-40 pts): Stable balance gets maximum points</li>
+                <li>• Transfer Activity (0-20 pts): Regular transfers increase score</li>
+              </ul>
+            </div>
+
+            <div className="border-l-4 border-purple-500 pl-4">
+              <h3 className="font-semibold mb-2">3. Wallet Age (15% - Max 60 points)</h3>
+              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                <li>• &lt;3 months = 5 pts</li>
+                <li>• 3-6 months = 15 pts</li>
+                <li>• 6-12 months = 30 pts</li>
+                <li>• 1-2 years = 45 pts</li>
+                <li>• &gt;2 years = 60 pts</li>
+              </ul>
+            </div>
+
+            <div className="border-l-4 border-yellow-500 pl-4">
+              <h3 className="font-semibold mb-2">4. Social Activity (8% - Max 30 points)</h3>
+              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                <li>• Transfer reputation to others = +20 pts</li>
+                <li>• Receive reputation = +10 pts</li>
+                <li>• Vote in DAO = +10 pts</li>
+              </ul>
+            </div>
+
+            <div className="border-l-4 border-pink-500 pl-4">
+              <h3 className="font-semibold mb-2">Bonuses</h3>
+              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                <li>• Active in last 30 days = +15 pts</li>
+                <li>• Long-term holding (&gt;1 year) = +20 pts</li>
+              </ul>
+            </div>
+
+            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <p className="text-sm font-medium">Maximum Total Score: 390 points</p>
+            </div>
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <FAQ
+          items={[
+            {
+              question: 'How is my reputation calculated?',
+              answer: 'Your reputation is calculated based on transaction history (46%), balance and activity (31%), wallet age (15%), and social activity (8%). Each category has specific criteria that determine your score. See the Reputation Criteria section above for details.',
+            },
+            {
+              question: 'Do I lose tokens when voting?',
+              answer: 'No, your reputation tokens stay in your wallet when you vote. They are only used to determine your voting power - you don\'t lose them.',
+            },
+            {
+              question: 'Can I mint reputation multiple times?',
+              answer: 'You can only mint reputation once based on your current calculated score. If your reputation increases, you would need to wait for the next minting period or get the contract owner to mint additional reputation.',
+            },
+            {
+              question: 'How often does my reputation update?',
+              answer: 'Your reputation score is calculated in real-time based on your on-chain activity. The calculation updates whenever you check it, reflecting your latest transactions and balance.',
+            },
+          ]}
+        />
+      </div>
+    </div>
+  )
+}

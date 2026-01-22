@@ -1,0 +1,26 @@
+{
+  "name": "reputation-hub",
+  "version": "1.0.0",
+  "description": "Decentralized reputation hub for EVM networks",
+  "private": true,
+  "workspaces": [
+    "contracts",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install && cd contracts && npm install && cd ../frontend && npm install",
+    "test": "cd contracts && npm test",
+    "deploy": "cd contracts && npx hardhat run scripts/deploy.js",
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "web3",
+    "reputation",
+    "dao",
+    "ethereum",
+    "evm"
+  ],
+  "author": "",
+  "license": "MIT"
+}

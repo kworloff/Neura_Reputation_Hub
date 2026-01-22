@@ -1,0 +1,35 @@
+{
+  "networks": {
+    "neura_testnet": {
+      "rpcUrl": "https://rpc.ankr.com/neura_testnet",
+      "chainId": 267,
+      "explorerUrl": "",
+      "contracts": {
+        "reputationToken": "",
+        "reputationHub": "",
+        "reputationDAO": ""
+      }
+    },
+    "sepolia": {
+      "rpcUrl": "https://sepolia.infura.io/v3/YOUR_INFURA_KEY",
+      "chainId": 11155111,
+      "explorerUrl": "https://sepolia.etherscan.io",
+      "contracts": {
+        "reputationToken": "",
+        "reputationHub": "",
+        "reputationDAO": ""
+      }
+    },
+    "localhost": {
+      "rpcUrl": "http://127.0.0.1:8545",
+      "chainId": 31337,
+      "explorerUrl": "",
+      "contracts": {
+        "reputationToken": "",
+        "reputationHub": "",
+        "reputationDAO": ""
+      }
+    }
+  },
+  "defaultNetwork": "neura_testnet"
+}
