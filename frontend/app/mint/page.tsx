@@ -48,7 +48,8 @@ export default function MintPage() {
       
       // Получаем текущий блок
       const currentBlock = await provider.getBlockNumber()
-      const fromBlock = Math.max(0, currentBlock - 50000) // Последние ~50000 блоков
+      // Уменьшаем диапазон до 10000 блоков, чтобы избежать ошибки "Block range is too large"
+      const fromBlock = Math.max(0, currentBlock - 10000)
       
       // Получаем события ReputationMinted
       const mintTopic = ethers.id('ReputationMinted(address,uint256)')
@@ -57,6 +58,15 @@ export default function MintPage() {
         topics: [mintTopic],
         fromBlock,
         toBlock: currentBlock,
+      }).catch((err) => {
+        // Если диапазон все еще слишком большой, пробуем еще меньше
+        console.warn('Failed to get logs for large range, trying smaller range:', err)
+        return provider.getLogs({
+          address: hubAddress,
+          topics: [mintTopic],
+          fromBlock: Math.max(0, currentBlock - 5000),
+          toBlock: currentBlock,
+        })
       })
 
       // Парсим события

@@ -58,16 +58,38 @@ export default function FeedPage() {
       const feed = await hubContract.getFeed(itemsPerPage, offset)
       
       // Получаем txHash из событий для каждой передачи
+      // Используем блоки только из текущей страницы для оптимизации
       const currentBlock = await provider.getBlockNumber()
-      const fromBlock = Math.max(0, currentBlock - 50000) // Последние ~50000 блоков
       
-      // Получаем события ReputationTransferred
+      // Определяем диапазон блоков на основе данных из feed
+      let minBlock = currentBlock
+      let maxBlock = 0
+      for (const transfer of feed) {
+        const blockNum = Number(transfer.blockNumber.toString())
+        if (blockNum < minBlock) minBlock = blockNum
+        if (blockNum > maxBlock) maxBlock = blockNum
+      }
+      
+      // Добавляем небольшой буфер (1000 блоков) для надежности
+      const fromBlock = Math.max(0, minBlock - 1000)
+      const toBlock = Math.min(currentBlock, maxBlock + 1000)
+      
+      // Получаем события ReputationTransferred только для нужного диапазона
       const transferTopic = ethers.id('ReputationTransferred(address,address,uint256,string,uint256)')
       const logs = await provider.getLogs({
         address: hubAddress,
         topics: [transferTopic],
         fromBlock,
-        toBlock: currentBlock,
+        toBlock,
+      }).catch((err) => {
+        // Если диапазон все еще слишком большой, пробуем еще меньше
+        console.warn('Failed to get logs for range, trying smaller range:', err)
+        return provider.getLogs({
+          address: hubAddress,
+          topics: [transferTopic],
+          fromBlock: Math.max(0, maxBlock - 5000),
+          toBlock: Math.min(currentBlock, maxBlock + 100),
+        })
       })
 
       // Создаем маппинг blockNumber -> txHash для быстрого поиска
