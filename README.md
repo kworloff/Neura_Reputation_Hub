@@ -1,44 +1,39 @@
-# 🏆 Reputation Hub - EVM Hackathon Project
+# 🏆 Neura Reputation Hub — EVM Hackathon Project
 
-Децентрализованная платформа для оценки и управления репутацией кошельков в EVM сетях.
+A decentralized platform for evaluating and managing wallet reputation on EVM networks.
 
-## 📋 Описание
+## 📋 Overview
 
-Reputation Hub позволяет:
-- 📊 Оценивать репутацию кошельков на основе их активности в сети
-- 🪙 Получать токены репутации (ERC-20)
-- 💬 Передавать репутацию другим пользователям с сообщениями
-- 📰 Просматривать фид всех передач репутации
-- 🗳️ Голосовать в DAO используя свою репутацию
+**Neura Reputation Hub** lets you:
 
-## 🛠 Технологии
+- 📊 **Evaluate** wallet reputation from on-chain activity
+- 🪙 **Earn** reputation tokens (ERC‑20)
+- 💬 **Transfer** reputation to others with messages
+- 📰 **Browse** a feed of all reputation transfers
+- 🗳️ **Vote** in the DAO using your reputation
 
-- **Smart Contracts**: Solidity ^0.8.20, Hardhat
+## 🛠 Tech Stack
+
+- **Smart contracts**: Solidity ^0.8.20, Hardhat, OpenZeppelin
 - **Frontend**: Next.js 14+, TypeScript, Tailwind CSS, ethers.js v6
-- **Deployment**: Netlify (Frontend), Etherscan (Contracts)
+- **Deploy**: Netlify (frontend), Neura Testnet (contracts)
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Установка зависимостей
+### Install dependencies
 
 ```bash
-# Root dependencies
 npm install
-
-# Contracts dependencies
-cd contracts
-npm install
-
-# Frontend dependencies
-cd ../frontend
-npm install
+cd contracts && npm install
+cd ../frontend && npm install
 ```
 
-### Настройка конфигурации
+### Configuration
 
-1. Скопируйте `config.example.json` в `config.json`
-2. Создайте `.env` в корне (для деплоя контрактов): `PRIVATE_KEY`, `NEURA_RPC_URL`
-3. В `frontend/` создайте `.env.local`:
+1. Copy `config.example.json` to `config.json`.
+2. Create `.env` in the project root (for contract deploy): `PRIVATE_KEY`, `NEURA_RPC_URL`.
+3. In `frontend/`, create `.env.local` (see `frontend/.env.example`):
+
    ```
    NEXT_PUBLIC_RPC_URL=https://rpc.ankr.com/neura_testnet
    NEXT_PUBLIC_CHAIN_ID=267
@@ -47,59 +42,63 @@ npm install
    NEXT_PUBLIC_CONTRACT_ADDRESS_HUB=0x...
    NEXT_PUBLIC_CONTRACT_ADDRESS_DAO=0x...
    ```
-   Адреса контрактов берутся из `config.json` после деплоя.
 
-### Деплой контрактов (Neura Testnet)
+   Fill contract addresses from `config.json` after deploying.
+
+### Deploy contracts (Neura Testnet)
 
 ```bash
 cd contracts
 npx hardhat run scripts/deploy.js --network neura_testnet
 ```
 
-После деплоя обновите адреса в `frontend/.env.local`.
+Then update addresses in `frontend/.env.local`.
 
-### Запуск frontend
+### Run frontend
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-### Деплой на Netlify
+## 🌐 Deploy on Netlify
 
-1. Запушьте код в **публичный** репозиторий (GitHub / GitLab).
-2. В [Netlify](https://app.netlify.com) → **Add new site** → **Import an existing project** → выберите репозиторий.
-3. Настройки сборки:
+1. Push the repo to a **public** GitHub/GitLab repository.
+2. In [Netlify](https://app.netlify.com) → **Add new site** → **Import an existing project** → select the repo.
+3. Build settings:
    - **Base directory:** `frontend`
    - **Build command:** `npm run build`
-   - **Publish directory:** оставьте по умолчанию (используется `frontend/netlify.toml` и плагин Next.js).
+   - **Publish directory:** leave default (uses `frontend/netlify.toml` and Next.js plugin).
 4. **Environment variables** (Site settings → Environment variables):
    - `NEXT_PUBLIC_RPC_URL` = `https://rpc.ankr.com/neura_testnet`
    - `NEXT_PUBLIC_CHAIN_ID` = `267`
    - `NEXT_PUBLIC_CHAIN_NAME` = `Neura Testnet`
-   - `NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN` = адрес из `config.json`
-   - `NEXT_PUBLIC_CONTRACT_ADDRESS_HUB` = адрес из `config.json`
-   - `NEXT_PUBLIC_CONTRACT_ADDRESS_DAO` = адрес из `config.json`
-5. **Deploy**.
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN` = from `config.json`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_HUB` = from `config.json`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_DAO` = from `config.json`
+5. Trigger **Deploy**.
 
-## 📁 Структура проекта
+## 📁 Project structure
 
 ```
-├── contracts/          # Solidity контракты, скрипты деплоя, тесты
-├── frontend/           # Next.js приложение (деплой на Netlify)
+├── contracts/          # Solidity contracts, deploy scripts, tests
+├── frontend/           # Next.js app (deploy to Netlify)
 ├── config.example.json
 ├── README.md
 └── ...
 ```
 
-## 📝 Документация
+## 📝 Docs
 
-Подробный роудмап разработки смотрите в [road.md](./road.md)
+- [road.md](./road.md) — development roadmap
+- [REPUTATION_CRITERIA.md](./REPUTATION_CRITERIA.md) — reputation scoring
+- [PROJECT_DESCRIPTION.md](./PROJECT_DESCRIPTION.md) — project summary
+- [SECURITY_AUDIT.md](./SECURITY_AUDIT.md) — security notes
 
-## 🔐 Безопасность
+## 🔐 Security
 
-⚠️ **Никогда не коммитьте приватные ключи или секретные данные в Git!**
+⚠️ **Do not commit private keys or secrets to Git.**
 
-## 📄 Лицензия
+## 📄 License
 
 MIT
