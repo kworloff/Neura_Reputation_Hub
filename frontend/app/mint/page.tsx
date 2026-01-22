@@ -3,12 +3,10 @@
 import { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
 import Link from 'next/link'
-import { getCurrentAccount } from '@/lib/web3'
+import { getCurrentAccount, getProvider } from '@/lib/web3'
 import { getReputationHubContract, getReputationTokenContract } from '@/lib/contracts'
 import { calculateWalletReputation, getReputationBalance, getReputationScore } from '@/lib/reputation'
 import { formatAddress, formatAddressOrName, formatDate, getEtherscanLink } from '@/lib/utils'
-import Link from 'next/link'
-import { getProvider } from '@/lib/web3'
 import FAQ from '@/components/FAQ'
 
 interface MintEvent {
