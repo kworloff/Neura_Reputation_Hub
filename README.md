@@ -47,12 +47,25 @@ cd ../frontend && npm install
 
 ### Deploy contracts (Neura Testnet)
 
-```bash
-cd contracts
-npx hardhat run scripts/deploy.js --network neura_testnet
-```
+1. **Set up environment variables:**
+   ```bash
+   # Copy .env.example to .env (if not exists)
+   cp .env.example .env
+   
+   # Edit .env and add your PRIVATE_KEY (without 0x prefix)
+   # Make sure you have ANKR tokens in your wallet for gas fees
+   ```
 
-Then update addresses in `frontend/.env.local`.
+2. **Deploy:**
+   ```bash
+   cd contracts
+   npx hardhat run scripts/deploy.js --network neura_testnet
+   ```
+
+3. **Update addresses:**
+   - Contract addresses will be automatically saved to `config.json`
+   - Update `frontend/.env.local` with new contract addresses
+   - Update Netlify environment variables (if deployed)
 
 ### Run frontend
 
