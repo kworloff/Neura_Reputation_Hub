@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { getCurrentAccount } from '@/lib/web3'
 import { getReputationDAOContract, getReputationTokenContract, getReputationHubContract } from '@/lib/contracts'
 import { getReputationBalance } from '@/lib/reputation'
 import { formatAddress, formatAddressOrName, formatDate } from '@/lib/utils'
 import FAQ from '@/components/FAQ'
+
+const WalletConnect = dynamic(() => import('@/components/web3/WalletConnect'), { ssr: false })
 
 interface Proposal {
   id: number
@@ -42,23 +45,31 @@ export default function DAOPage() {
   const tokenAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN || ''
 
   useEffect(() => {
-    loadData()
+    loadProposals()
   }, [])
 
-  const loadData = async () => {
-    try {
+  useEffect(() => {
+    let mounted = true
+    const check = async () => {
       const account = await getCurrentAccount()
-      if (account) {
-        setAddress(account)
-        const balance = await getReputationBalance(tokenAddress, account)
-        setTokenBalance(balance)
+      if (!mounted) return
+      setAddress(account)
+      if (account && tokenAddress) {
+        try {
+          const balance = await getReputationBalance(tokenAddress, account)
+          setTokenBalance(balance)
+        } catch (e) {
+          console.error('Failed to load balance:', e)
+        }
       }
-
-      await loadProposals()
-    } catch (err: any) {
-      setError(err.message || 'Failed to load data')
     }
-  }
+    check()
+    const interval = setInterval(check, 2500)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [])
 
   const loadProposals = async () => {
     if (!daoAddress) {
@@ -326,37 +337,33 @@ export default function DAOPage() {
     <div className="min-h-screen p-8 md:p-24">
       <div className="max-w-4xl mx-auto">
         {/* Navigation */}
-        <div className="mb-6 flex gap-4 justify-center">
-          <Link
-            href="/"
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+        <div className="mb-6 flex flex-wrap gap-4 justify-center items-center">
+          <Link href="/" className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm">
             Home
           </Link>
-          <Link
-            href="/mint"
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/mint" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm">
             Mint Reputation
           </Link>
-          <Link
-            href="/transfer"
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/transfer" className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm">
             Transfer Reputation
           </Link>
-          <Link
-            href="/feed"
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/feed" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm">
             View Feed
           </Link>
+          <WalletConnect />
         </div>
 
         <h1 className="text-4xl font-bold text-center mb-8">DAO Governance</h1>
 
+        {!address && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
+            <p className="text-amber-800 dark:text-amber-200 mb-3">Connect your wallet to create proposals and vote.</p>
+            <WalletConnect />
+          </div>
+        )}
+
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
             <h2 className="text-2xl font-semibold">Proposals</h2>
             <div className="flex items-center gap-4">
               {address && (
@@ -369,7 +376,7 @@ export default function DAOPage() {
                 disabled={!address}
                 className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-sm"
               >
-                Create Proposal
+                {address ? 'Create Proposal' : 'Connect to create'}
               </button>
             </div>
           </div>

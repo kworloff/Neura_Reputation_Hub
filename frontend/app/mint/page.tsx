@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { getCurrentAccount, getProvider } from '@/lib/web3'
 import { getReputationHubContract, getReputationTokenContract } from '@/lib/contracts'
 import { calculateWalletReputation, getReputationBalance, getReputationScore } from '@/lib/reputation'
 import { formatAddress, formatAddressOrName, formatDate, getEtherscanLink } from '@/lib/utils'
 import FAQ from '@/components/FAQ'
+
+const WalletConnect = dynamic(() => import('@/components/web3/WalletConnect'), { ssr: false })
 
 interface MintEvent {
   wallet: string
@@ -34,8 +37,23 @@ export default function MintPage() {
   const tokenAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN || ''
 
   useEffect(() => {
-    loadWalletData()
     loadMintFeed()
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const check = async () => {
+      const account = await getCurrentAccount()
+      if (!mounted) return
+      setAddress(account)
+      if (account) loadWalletData(account)
+    }
+    check()
+    const interval = setInterval(check, 2500)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   const loadMintFeed = async () => {
@@ -103,18 +121,12 @@ export default function MintPage() {
     }
   }
 
-  const loadWalletData = async () => {
+  const loadWalletData = async (account: string) => {
+    if (!account || !hubAddress || !tokenAddress) return
     try {
-      const account = await getCurrentAccount()
-      if (!account) {
-        setError('Please connect your wallet first')
-        return
-      }
-
-      setAddress(account)
       setIsLoading(true)
+      setError(null)
 
-      // Загружаем данные параллельно
       const [score, balance, calculated] = await Promise.all([
         getReputationScore(hubAddress, account).catch(() => '0'),
         getReputationBalance(tokenAddress, account).catch(() => '0'),
@@ -219,9 +231,8 @@ export default function MintPage() {
         ? 'Reputation updated successfully!' 
         : 'Reputation minted successfully!')
       
-      // Обновляем данные
-      await loadWalletData()
-      await loadMintFeed() // Обновляем фид после минта
+      if (address) await loadWalletData(address)
+      await loadMintFeed()
     } catch (err: any) {
       console.error('Mint error:', err)
       if (err.message?.includes('exceeds maximum') || err.message?.includes('must be greater')) {
@@ -236,46 +247,24 @@ export default function MintPage() {
     }
   }
 
-  if (!address) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-24">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-          <p className="text-gray-500">Please connect your wallet to view and mint reputation</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen p-8 md:p-24">
       <div className="max-w-4xl mx-auto">
         {/* Navigation */}
-        <div className="mb-6 flex gap-4 justify-center">
-          <Link
-            href="/"
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+        <div className="mb-6 flex flex-wrap gap-4 justify-center items-center">
+          <Link href="/" className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm">
             Home
           </Link>
-          <Link
-            href="/transfer"
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/transfer" className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm">
             Transfer Reputation
           </Link>
-          <Link
-            href="/feed"
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/feed" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm">
             View Feed
           </Link>
-          <Link
-            href="/dao"
-            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/dao" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm">
             DAO
           </Link>
+          <WalletConnect />
         </div>
         
         <h1 className="text-4xl font-bold text-center mb-8">Mint Reputation</h1>
@@ -283,7 +272,12 @@ export default function MintPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-2xl font-semibold mb-4">Your Reputation</h2>
           
-          {isLoading ? (
+          {!address ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Connect your wallet to view your reputation and mint.</p>
+              <WalletConnect />
+            </div>
+          ) : isLoading ? (
             <div className="text-center py-8">
               <p className="text-gray-500">Loading...</p>
             </div>

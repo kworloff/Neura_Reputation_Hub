@@ -3,12 +3,15 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ethers } from 'ethers'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { getCurrentAccount } from '@/lib/web3'
 import { getReputationHubContract, getReputationTokenContract } from '@/lib/contracts'
 import { getReputationBalance } from '@/lib/reputation'
 import { formatAddress } from '@/lib/utils'
 import FAQ from '@/components/FAQ'
+
+const WalletConnect = dynamic(() => import('@/components/web3/WalletConnect'), { ssr: false })
 
 function TransferForm() {
   const searchParams = useSearchParams()
@@ -33,20 +36,26 @@ function TransferForm() {
   }, [searchParams])
 
   useEffect(() => {
-    loadWalletData()
+    let mounted = true
+    const check = async () => {
+      const account = await getCurrentAccount()
+      if (!mounted) return
+      setAddress(account)
+      if (account && tokenAddress) loadWalletData(account)
+    }
+    check()
+    const interval = setInterval(check, 2500)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [])
 
-  const loadWalletData = async () => {
+  const loadWalletData = async (account: string) => {
+    if (!tokenAddress) return
     try {
-      const account = await getCurrentAccount()
-      if (!account) {
-        setError('Please connect your wallet first')
-        return
-      }
-
-      setAddress(account)
       setIsLoading(true)
-
+      setError(null)
       const balance = await getReputationBalance(tokenAddress, account)
       setTokenBalance(balance)
     } catch (err: any) {
@@ -174,7 +183,7 @@ function TransferForm() {
       setRecipient('')
       setAmount('')
       setMessage('')
-      await loadWalletData()
+      if (address) await loadWalletData(address)
 
       setTimeout(() => {
         window.location.href = '/feed'
@@ -205,56 +214,41 @@ function TransferForm() {
     }
   }
 
-  if (!address) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-24">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-          <p className="text-gray-500">Please connect your wallet to transfer reputation</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen p-8 md:p-24">
       <div className="max-w-2xl mx-auto">
         {/* Navigation */}
-        <div className="mb-6 flex gap-4 justify-center">
-          <Link
-            href="/"
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+        <div className="mb-6 flex flex-wrap gap-4 justify-center items-center">
+          <Link href="/" className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm">
             Home
           </Link>
-          <Link
-            href="/mint"
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/mint" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm">
             Mint Reputation
           </Link>
-          <Link
-            href="/feed"
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/feed" className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-medium text-sm">
             View Feed
           </Link>
-          <Link
-            href="/dao"
-            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/dao" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm">
             DAO
           </Link>
+          <WalletConnect />
         </div>
 
         <h1 className="text-4xl font-bold text-center mb-8">Transfer Reputation</h1>
+
+        {!address && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
+            <p className="text-amber-800 dark:text-amber-200 mb-3">Connect your wallet to transfer reputation.</p>
+            <WalletConnect />
+          </div>
+        )}
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
           <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600 dark:text-gray-400">Your Reputation Balance:</span>
               <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {isLoading ? '...' : parseFloat(tokenBalance).toFixed(2)} REP
+                {!address ? '—' : isLoading ? '...' : parseFloat(tokenBalance).toFixed(2)} REP
               </span>
             </div>
           </div>
@@ -320,10 +314,10 @@ function TransferForm() {
             {/* Transfer Button */}
             <button
               onClick={handleTransfer}
-              disabled={isTransferring || !recipient || !amount || parseFloat(amount) <= 0}
+              disabled={!address || isTransferring || !recipient || !amount || parseFloat(amount) <= 0}
               className="w-full py-3 px-6 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
             >
-              {isTransferring ? 'Transferring...' : 'Transfer Reputation'}
+              {!address ? 'Connect wallet to transfer' : isTransferring ? 'Transferring...' : 'Transfer Reputation'}
             </button>
 
             {error && (

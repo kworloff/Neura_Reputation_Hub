@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { getReputationHubContract } from '@/lib/contracts'
 import { formatAddress, formatAddressOrName, formatDate, getEtherscanLink } from '@/lib/utils'
 import { ethers } from 'ethers'
 import { getProvider } from '@/lib/web3'
 import FAQ from '@/components/FAQ'
+
+const WalletConnect = dynamic(() => import('@/components/web3/WalletConnect'), { ssr: false })
 
 interface ReputationTransfer {
   from: string
@@ -136,31 +139,20 @@ export default function FeedPage() {
     <div className="min-h-screen p-8 md:p-24">
       <div className="max-w-4xl mx-auto">
         {/* Navigation */}
-        <div className="mb-6 flex gap-4 justify-center">
-          <Link
-            href="/"
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+        <div className="mb-6 flex flex-wrap gap-4 justify-center items-center">
+          <Link href="/" className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm">
             Home
           </Link>
-          <Link
-            href="/mint"
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/mint" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm">
             Mint Reputation
           </Link>
-          <Link
-            href="/transfer"
-            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/transfer" className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm">
             Transfer Reputation
           </Link>
-          <Link
-            href="/dao"
-            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm"
-          >
+          <Link href="/dao" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm">
             DAO
           </Link>
+          <WalletConnect />
         </div>
 
         <h1 className="text-4xl font-bold text-center mb-8">Reputation Feed</h1>
