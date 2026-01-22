@@ -24,6 +24,12 @@ contract ReputationHub is Ownable {
     // Маппинг репутации кошельков
     mapping(address => uint256) public reputationScores;
     
+    // Маппинг для отслеживания, минтил ли пользователь уже репутацию
+    mapping(address => bool) public hasMinted;
+    
+    // Максимальная репутация, которую можно заминтить (500 REP)
+    uint256 public constant MAX_MINTABLE_REPUTATION = 500 * 10**18;
+    
     // История передач
     ReputationTransfer[] public transfers;
     
@@ -54,7 +60,7 @@ contract ReputationHub is Ownable {
     }
 
     /**
-     * @dev Выдача репутации кошельку
+     * @dev Выдача репутации кошельку (только для owner)
      * @param wallet Адрес кошелька
      * @param amount Количество репутации для выдачи
      */
@@ -62,6 +68,33 @@ contract ReputationHub is Ownable {
         reputationScores[wallet] += amount;
         reputationToken.mint(wallet, amount);
         emit ReputationMinted(wallet, amount);
+    }
+
+    /**
+     * @dev Автоматический минт репутации пользователем на основе расчета
+     * @param amount Количество репутации для минтинга (должно быть рассчитано на фронтенде)
+     */
+    function autoMintReputation(uint256 amount) external {
+        require(amount > 0, "Amount must be greater than 0");
+        require(amount <= MAX_MINTABLE_REPUTATION, "Amount exceeds maximum mintable reputation");
+        
+        address wallet = msg.sender;
+        
+        // Если пользователь уже минтил, разрешаем обновление только если новое значение больше
+        if (hasMinted[wallet]) {
+            require(amount > reputationScores[wallet], "New amount must be greater than current score");
+            // Обновляем счет (вычитаем старое значение и добавляем новое)
+            uint256 difference = amount - reputationScores[wallet];
+            reputationScores[wallet] = amount;
+            reputationToken.mint(wallet, difference);
+            emit ReputationMinted(wallet, difference);
+        } else {
+            // Первый минт
+            reputationScores[wallet] = amount;
+            reputationToken.mint(wallet, amount);
+            hasMinted[wallet] = true;
+            emit ReputationMinted(wallet, amount);
+        }
     }
 
     /**

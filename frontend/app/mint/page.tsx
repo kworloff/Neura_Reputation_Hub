@@ -82,56 +82,75 @@ export default function MintPage() {
       // Получаем контракт Hub
       const hubContract = getReputationHubContract(hubAddress, signer)
       
-      // Проверяем, является ли пользователь owner контракта
-      try {
-        const owner = await hubContract.owner()
-        if (owner.toLowerCase() !== address.toLowerCase()) {
-          setError('Only the contract owner can mint reputation. Please contact the contract owner to mint your reputation based on your calculated score.')
-          setIsMinting(false)
-          return
-        }
-      } catch (ownerErr: any) {
-        console.error('Error checking owner:', ownerErr)
-        // Продолжаем, если не удалось проверить
-      }
-      
       // Рассчитываем количество репутации для минта (в wei)
       const amount = ethers.parseEther(calculatedScore.toString())
       
+      // Проверяем максимальное значение
+      try {
+        const maxMintable = await hubContract.MAX_MINTABLE_REPUTATION()
+        if (amount > maxMintable) {
+          setError(`Calculated score exceeds maximum mintable reputation (${ethers.formatEther(maxMintable)} REP). Please contact support.`)
+          setIsMinting(false)
+          return
+        }
+      } catch (maxErr: any) {
+        console.error('Error checking max mintable:', maxErr)
+        // Продолжаем, если не удалось проверить
+      }
+      
+      // Проверяем, минтил ли пользователь уже
+      let hasMintedBefore = false
+      try {
+        hasMintedBefore = await hubContract.hasMinted(address)
+        if (hasMintedBefore) {
+          const currentScore = await hubContract.getReputationScore(address)
+          if (amount <= currentScore) {
+            setError(`You have already minted ${ethers.formatEther(currentScore)} REP. Your new calculated score (${calculatedScore} REP) must be greater than your current score to update.`)
+            setIsMinting(false)
+            return
+          }
+        }
+      } catch (checkErr: any) {
+        console.error('Error checking mint status:', checkErr)
+        // Продолжаем, если не удалось проверить
+      }
+      
       // Предварительная проверка через estimateGas
       try {
-        await hubContract.mintReputation.estimateGas(address, amount)
+        await hubContract.autoMintReputation.estimateGas(amount)
       } catch (estimateErr: any) {
         let errMsg = 'Cannot mint reputation. '
-        if (estimateErr.message?.includes('Ownable') || estimateErr.message?.includes('owner')) {
-          errMsg = 'Only the contract owner can mint reputation. Please contact the contract owner.'
+        if (estimateErr.message?.includes('Amount exceeds maximum')) {
+          errMsg = 'Calculated score exceeds maximum mintable reputation (500 REP).'
+        } else if (estimateErr.message?.includes('New amount must be greater')) {
+          errMsg = 'Your new calculated score must be greater than your current reputation score to update.'
         } else if (estimateErr.reason) {
           errMsg = estimateErr.reason
         } else if (estimateErr.message) {
           errMsg += estimateErr.message
         } else {
-          errMsg += 'Check your permissions and try again.'
+          errMsg += 'Check your calculated score and try again.'
         }
         throw new Error(errMsg)
       }
       
-      // Вызываем функцию минта
-      const tx = await hubContract.mintReputation(address, amount)
+      // Вызываем публичную функцию автоматического минта
+      const tx = await hubContract.autoMintReputation(amount)
       setSuccess('Transaction sent! Waiting for confirmation...')
       
       await tx.wait()
-      setSuccess('Reputation minted successfully!')
+      setSuccess(hasMintedBefore 
+        ? 'Reputation updated successfully!' 
+        : 'Reputation minted successfully!')
       
       // Обновляем данные
       await loadWalletData()
     } catch (err: any) {
       console.error('Mint error:', err)
-      if (err.message?.includes('Only the contract owner') || err.message?.includes('owner')) {
+      if (err.message?.includes('exceeds maximum') || err.message?.includes('must be greater')) {
         setError(err.message)
-      } else if (err.message?.includes('Ownable: caller is not the owner') || err.message?.includes('OwnableUnauthorizedAccount')) {
-        setError('Only the contract owner can mint reputation. Please contact the contract owner to mint your reputation based on your calculated score.')
       } else if (err.message?.includes('CALL_EXCEPTION') || err.message?.includes('missing revert data')) {
-        setError('Transaction would fail. Only the contract owner can mint reputation. Please contact the contract owner.')
+        setError('Transaction would fail. Check your calculated score and ensure it does not exceed 500 REP.')
       } else {
         setError(err.message || 'Failed to mint reputation')
       }

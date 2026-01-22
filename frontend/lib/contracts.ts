@@ -12,11 +12,14 @@ export const REPUTATION_TOKEN_ABI = [
 export const REPUTATION_HUB_ABI = [
   'function calculateReputation(address wallet) view returns (uint256)',
   'function mintReputation(address wallet, uint256 amount)',
+  'function autoMintReputation(uint256 amount)',
   'function getReputationScore(address wallet) view returns (uint256)',
   'function transferReputation(address to, uint256 amount, string memory message)',
   'function getFeed(uint256 limit, uint256 offset) view returns (tuple(address from, address to, uint256 amount, string message, uint256 timestamp, uint256 blockNumber)[])',
   'function getTransferCount() view returns (uint256)',
   'function owner() view returns (address)',
+  'function hasMinted(address wallet) view returns (bool)',
+  'function MAX_MINTABLE_REPUTATION() view returns (uint256)',
   'event ReputationMinted(address indexed wallet, uint256 amount)',
   'event ReputationTransferred(address indexed from, address indexed to, uint256 amount, string message, uint256 timestamp)',
 ];
