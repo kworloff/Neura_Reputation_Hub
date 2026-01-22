@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ethers } from 'ethers'
 import Link from 'next/link'
@@ -10,7 +10,7 @@ import { getReputationBalance } from '@/lib/reputation'
 import { formatAddress } from '@/lib/utils'
 import FAQ from '@/components/FAQ'
 
-export default function TransferPage() {
+function TransferForm() {
   const searchParams = useSearchParams()
   const [address, setAddress] = useState<string | null>(null)
   const [tokenBalance, setTokenBalance] = useState<string>('0')
@@ -374,5 +374,19 @@ export default function TransferPage() {
         />
       </div>
     </div>
+  )
+}
+
+export default function TransferPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center p-24">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Loading...</h2>
+        </div>
+      </div>
+    }>
+      <TransferForm />
+    </Suspense>
   )
 }
