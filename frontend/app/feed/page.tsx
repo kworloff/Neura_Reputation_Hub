@@ -60,45 +60,53 @@ export default function FeedPage() {
       // Получаем фид
       const feed = await hubContract.getFeed(itemsPerPage, offset)
       
-      // Получаем txHash из событий для каждой передачи
-      // Используем блоки только из текущей страницы для оптимизации
-      const currentBlock = await provider.getBlockNumber()
-      
-      // Определяем диапазон блоков на основе данных из feed
-      let minBlock = currentBlock
-      let maxBlock = 0
-      for (const transfer of feed) {
-        const blockNum = Number(transfer.blockNumber.toString())
-        if (blockNum < minBlock) minBlock = blockNum
-        if (blockNum > maxBlock) maxBlock = blockNum
-      }
-      
-      // Добавляем небольшой буфер (1000 блоков) для надежности
-      const fromBlock = Math.max(0, minBlock - 1000)
-      const toBlock = Math.min(currentBlock, maxBlock + 1000)
-      
-      // Получаем события ReputationTransferred только для нужного диапазона
+      // Получаем txHash из событий. RPC "Block range is too large" — строго лимит ~2000 блоков.
+      const MAX_BLOCK_RANGE = 2000
       const transferTopic = ethers.id('ReputationTransferred(address,address,uint256,string,uint256)')
-      const logs = await provider.getLogs({
-        address: hubAddress,
-        topics: [transferTopic],
-        fromBlock,
-        toBlock,
-      }).catch((err) => {
-        // Если диапазон все еще слишком большой, пробуем еще меньше
-        console.warn('Failed to get logs for range, trying smaller range:', err)
-        return provider.getLogs({
-          address: hubAddress,
-          topics: [transferTopic],
-          fromBlock: Math.max(0, maxBlock - 5000),
-          toBlock: Math.min(currentBlock, maxBlock + 100),
-        })
-      })
-
-      // Создаем маппинг blockNumber -> txHash для быстрого поиска
       const blockToTxHash = new Map<number, string>()
-      for (const log of logs) {
-        blockToTxHash.set(log.blockNumber, log.transactionHash)
+
+      if (feed.length > 0) {
+        let minBlock = Number(feed[0].blockNumber.toString())
+        let maxBlock = minBlock
+        for (const transfer of feed) {
+          const blockNum = Number(transfer.blockNumber.toString())
+          if (blockNum < minBlock) minBlock = blockNum
+          if (blockNum > maxBlock) maxBlock = blockNum
+        }
+
+        const rangeStart = Math.max(0, minBlock - 50)
+        const rangeEnd = maxBlock + 50
+        const totalRange = rangeEnd - rangeStart
+
+        if (totalRange <= MAX_BLOCK_RANGE) {
+          try {
+            const logs = await provider.getLogs({
+              address: hubAddress,
+              topics: [transferTopic],
+              fromBlock: rangeStart,
+              toBlock: rangeEnd,
+            })
+            for (const log of logs) blockToTxHash.set(log.blockNumber, log.transactionHash)
+          } catch (e) {
+            console.warn('getLogs failed, tx links unavailable:', e)
+          }
+        } else {
+          // Разбиваем на чанки по MAX_BLOCK_RANGE
+          for (let from = rangeStart; from <= rangeEnd; from += MAX_BLOCK_RANGE) {
+            const to = Math.min(from + MAX_BLOCK_RANGE - 1, rangeEnd)
+            try {
+              const logs = await provider.getLogs({
+                address: hubAddress,
+                topics: [transferTopic],
+                fromBlock: from,
+                toBlock: to,
+              })
+              for (const log of logs) blockToTxHash.set(log.blockNumber, log.transactionHash)
+            } catch (e) {
+              console.warn('getLogs chunk failed:', e)
+            }
+          }
+        }
       }
       
       // Конвертируем данные и добавляем txHash

@@ -64,28 +64,26 @@ export default function MintPage() {
       const provider = getProvider()
       const hubContract = getReputationHubContract(hubAddress)
       
-      // Получаем текущий блок
       const currentBlock = await provider.getBlockNumber()
-      // Уменьшаем диапазон до 10000 блоков, чтобы избежать ошибки "Block range is too large"
-      const fromBlock = Math.max(0, currentBlock - 10000)
-      
-      // Получаем события ReputationMinted
+      const MAX_BLOCK_RANGE = 2000
       const mintTopic = ethers.id('ReputationMinted(address,uint256)')
-      const logs = await provider.getLogs({
-        address: hubAddress,
-        topics: [mintTopic],
-        fromBlock,
-        toBlock: currentBlock,
-      }).catch((err) => {
-        // Если диапазон все еще слишком большой, пробуем еще меньше
-        console.warn('Failed to get logs for large range, trying smaller range:', err)
-        return provider.getLogs({
-          address: hubAddress,
-          topics: [mintTopic],
-          fromBlock: Math.max(0, currentBlock - 5000),
-          toBlock: currentBlock,
-        })
-      })
+      const allLogs: Awaited<ReturnType<typeof provider.getLogs>> = []
+
+      for (let from = Math.max(0, currentBlock - 5000); from <= currentBlock; from += MAX_BLOCK_RANGE) {
+        const to = Math.min(from + MAX_BLOCK_RANGE - 1, currentBlock)
+        try {
+          const chunk = await provider.getLogs({
+            address: hubAddress,
+            topics: [mintTopic],
+            fromBlock: from,
+            toBlock: to,
+          })
+          allLogs.push(...chunk)
+        } catch (e) {
+          console.warn('Mint feed getLogs chunk failed:', e)
+        }
+      }
+      const logs = allLogs
 
       // Парсим события
       const events: MintEvent[] = []
