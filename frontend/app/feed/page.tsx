@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { getReputationHubContract } from '@/lib/contracts'
 import { formatAddress, formatAddressOrName, formatDate, getEtherscanLink } from '@/lib/utils'
 import { ethers } from 'ethers'
+import { getProvider } from '@/lib/web3'
 import FAQ from '@/components/FAQ'
 
 interface ReputationTransfer {
@@ -14,6 +15,7 @@ interface ReputationTransfer {
   message: string
   timestamp: bigint
   blockNumber: bigint
+  txHash?: string
 }
 
 export default function FeedPage() {
@@ -42,6 +44,7 @@ export default function FeedPage() {
     setError(null)
 
     try {
+      const provider = getProvider()
       const hubContract = getReputationHubContract(hubAddress)
       
       // Получаем общее количество передач
@@ -54,15 +57,38 @@ export default function FeedPage() {
       // Получаем фид
       const feed = await hubContract.getFeed(itemsPerPage, offset)
       
-      // Конвертируем данные
-      const formattedFeed: ReputationTransfer[] = feed.map((transfer: any) => ({
-        from: transfer.from,
-        to: transfer.to,
-        amount: BigInt(transfer.amount.toString()),
-        message: transfer.message,
-        timestamp: BigInt(transfer.timestamp.toString()),
-        blockNumber: BigInt(transfer.blockNumber.toString()),
-      }))
+      // Получаем txHash из событий для каждой передачи
+      const currentBlock = await provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 50000) // Последние ~50000 блоков
+      
+      // Получаем события ReputationTransferred
+      const transferTopic = ethers.id('ReputationTransferred(address,address,uint256,string,uint256)')
+      const logs = await provider.getLogs({
+        address: hubAddress,
+        topics: [transferTopic],
+        fromBlock,
+        toBlock: currentBlock,
+      })
+
+      // Создаем маппинг blockNumber -> txHash для быстрого поиска
+      const blockToTxHash = new Map<number, string>()
+      for (const log of logs) {
+        blockToTxHash.set(log.blockNumber, log.transactionHash)
+      }
+      
+      // Конвертируем данные и добавляем txHash
+      const formattedFeed: ReputationTransfer[] = feed.map((transfer: any) => {
+        const blockNum = Number(transfer.blockNumber.toString())
+        return {
+          from: transfer.from,
+          to: transfer.to,
+          amount: BigInt(transfer.amount.toString()),
+          message: transfer.message,
+          timestamp: BigInt(transfer.timestamp.toString()),
+          blockNumber: BigInt(transfer.blockNumber.toString()),
+          txHash: blockToTxHash.get(blockNum),
+        }
+      })
 
       setTransfers(formattedFeed)
     } catch (err: any) {
@@ -205,19 +231,25 @@ export default function FeedPage() {
                     </div>
                     
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                         <span>{formatDate(Number(transfer.timestamp))}</span>
                         <span>•</span>
                         <span>Block: {transfer.blockNumber.toString()}</span>
                       </div>
-                      <a
-                        href={getEtherscanLink(transfer.from, 'neura_testnet')}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-500 hover:underline"
-                      >
-                        View on Explorer
-                      </a>
+                      {transfer.txHash ? (
+                        <a
+                          href={getEtherscanLink(transfer.txHash, 'neura_testnet', 'tx')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                        >
+                          View on Explorer
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          Transaction not found
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
