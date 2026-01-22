@@ -62,6 +62,11 @@ export default function MintPage() {
       return
     }
 
+    if (calculatedScore <= 0) {
+      setError('Calculated reputation score is 0. You need to have some activity to mint reputation.')
+      return
+    }
+
     setIsMinting(true)
     setError(null)
     setSuccess(null)
@@ -77,11 +82,40 @@ export default function MintPage() {
       // Получаем контракт Hub
       const hubContract = getReputationHubContract(hubAddress, signer)
       
+      // Проверяем, является ли пользователь owner контракта
+      try {
+        const owner = await hubContract.owner()
+        if (owner.toLowerCase() !== address.toLowerCase()) {
+          setError('Only the contract owner can mint reputation. Please contact the contract owner to mint your reputation based on your calculated score.')
+          setIsMinting(false)
+          return
+        }
+      } catch (ownerErr: any) {
+        console.error('Error checking owner:', ownerErr)
+        // Продолжаем, если не удалось проверить
+      }
+      
       // Рассчитываем количество репутации для минта (в wei)
       const amount = ethers.parseEther(calculatedScore.toString())
       
-      // Вызываем функцию минта (требует owner, но пока пытаемся)
-      // В будущем можно добавить публичную функцию
+      // Предварительная проверка через estimateGas
+      try {
+        await hubContract.mintReputation.estimateGas(address, amount)
+      } catch (estimateErr: any) {
+        let errMsg = 'Cannot mint reputation. '
+        if (estimateErr.message?.includes('Ownable') || estimateErr.message?.includes('owner')) {
+          errMsg = 'Only the contract owner can mint reputation. Please contact the contract owner.'
+        } else if (estimateErr.reason) {
+          errMsg = estimateErr.reason
+        } else if (estimateErr.message) {
+          errMsg += estimateErr.message
+        } else {
+          errMsg += 'Check your permissions and try again.'
+        }
+        throw new Error(errMsg)
+      }
+      
+      // Вызываем функцию минта
       const tx = await hubContract.mintReputation(address, amount)
       setSuccess('Transaction sent! Waiting for confirmation...')
       
@@ -91,8 +125,13 @@ export default function MintPage() {
       // Обновляем данные
       await loadWalletData()
     } catch (err: any) {
-      if (err.message?.includes('Ownable: caller is not the owner')) {
-        setError('Only contract owner can mint reputation. This feature will be available soon.')
+      console.error('Mint error:', err)
+      if (err.message?.includes('Only the contract owner') || err.message?.includes('owner')) {
+        setError(err.message)
+      } else if (err.message?.includes('Ownable: caller is not the owner') || err.message?.includes('OwnableUnauthorizedAccount')) {
+        setError('Only the contract owner can mint reputation. Please contact the contract owner to mint your reputation based on your calculated score.')
+      } else if (err.message?.includes('CALL_EXCEPTION') || err.message?.includes('missing revert data')) {
+        setError('Transaction would fail. Only the contract owner can mint reputation. Please contact the contract owner.')
       } else {
         setError(err.message || 'Failed to mint reputation')
       }
