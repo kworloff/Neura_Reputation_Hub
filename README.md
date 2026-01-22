@@ -67,21 +67,29 @@ npm run dev
 
 ### Деплой на Netlify
 
-1. Подключите репозиторий к Netlify
-2. **Base directory:** `frontend`
-3. **Build command:** `npm run build`
-4. **Publish directory:** `.next` (или оставьте настройки из `frontend/netlify.toml`)
-5. Добавьте переменные окружения: `NEXT_PUBLIC_RPC_URL`, `NEXT_PUBLIC_CHAIN_ID`, `NEXT_PUBLIC_CONTRACT_ADDRESS_*`
+1. Запушьте код в **публичный** репозиторий (GitHub / GitLab).
+2. В [Netlify](https://app.netlify.com) → **Add new site** → **Import an existing project** → выберите репозиторий.
+3. Настройки сборки:
+   - **Base directory:** `frontend`
+   - **Build command:** `npm run build`
+   - **Publish directory:** оставьте по умолчанию (используется `frontend/netlify.toml` и плагин Next.js).
+4. **Environment variables** (Site settings → Environment variables):
+   - `NEXT_PUBLIC_RPC_URL` = `https://rpc.ankr.com/neura_testnet`
+   - `NEXT_PUBLIC_CHAIN_ID` = `267`
+   - `NEXT_PUBLIC_CHAIN_NAME` = `Neura Testnet`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_TOKEN` = адрес из `config.json`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_HUB` = адрес из `config.json`
+   - `NEXT_PUBLIC_CONTRACT_ADDRESS_DAO` = адрес из `config.json`
+5. **Deploy**.
 
 ## 📁 Структура проекта
 
 ```
-reputation-hub/
-├── contracts/          # Solidity контракты
-├── frontend/           # Next.js приложение
-├── scripts/            # Скрипты деплоя
-├── config/             # Конфигурация
-└── tests/              # Тесты
+├── contracts/          # Solidity контракты, скрипты деплоя, тесты
+├── frontend/           # Next.js приложение (деплой на Netlify)
+├── config.example.json
+├── README.md
+└── ...
 ```
 
 ## 📝 Документация
