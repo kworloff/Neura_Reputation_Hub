@@ -7,9 +7,3 @@
 
 [build.environment]
   NODE_VERSION = "20"
-
-# Redirects для Next.js App Router
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
