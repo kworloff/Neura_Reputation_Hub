@@ -101,7 +101,6 @@ async function getTransactionHistory(
     // Ищем входящие и исходящие переводы
     const [incomingLogs, outgoingLogs] = await Promise.all([
       provider.getLogs({
-        address: null, // Любой контракт
         topics: [
           transferTopic,
           null, // from
@@ -111,7 +110,6 @@ async function getTransactionHistory(
         toBlock: currentBlock,
       }).catch(() => []),
       provider.getLogs({
-        address: null,
         topics: [
           transferTopic,
           addressTopic, // from
